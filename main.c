@@ -1,5 +1,3 @@
-#include "main.h"
-#include "linked_list.c"
 #include <math.h>
 #include <raylib.h>
 #include <stddef.h>
@@ -7,21 +5,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "main.h"
+#include "linked_list.c"
 
-#define N 20
-#define MAX_LAYER 10
-#define SPLIT_THRESHOLD 1
+#define N 800
+#define MAX_LAYER 9
+#define SPLIT_THRESHOLD 4
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 5
+#define OBJECT_RADIUS 3
 
-#define SPEED 3
+#define SPEED 0.1
 
 #define min(a, b) (a < b ? a : b)
 #define max(a, b) (a > b ? a : b)
 
 #define clamp(value, min_value, max_value) min(max(value, min_value), max_value)
+
+Object objects[N * sizeof(Object)];
 
 void split(struct Node *node)
 {
@@ -75,20 +77,20 @@ void split(struct Node *node)
                 /*	linked_list_remove(node->data, to_remove[index]);*/
                 /*}*/
 
-                struct LinkedListNode *to_free[node->data->len];
-                uint8_t to_free_len = 0;
+                struct LinkedListNode *to_remove[node->data->len];
+                uint8_t to_remove_len = 0;
 
                 struct LinkedListNode *current_node = node->data->left;
 
                 while (current_node != NULL)
                 {
-                    Object object = current_node->object;
+					Object *object = &objects[current_node->element];
 
-                    if (CheckCollisionPointRec(object.pos, new_node->rect))
+                    if (CheckCollisionPointRec(object->pos, new_node->rect))
                     {
-                        to_free[to_free_len] = current_node;
+                        to_remove[to_remove_len] = current_node;
 
-                        linked_list_push(new_node->data, object);
+                        linked_list_push(new_node->data, current_node->element);
                     }
 
                     current_node = current_node->right;
@@ -96,10 +98,10 @@ void split(struct Node *node)
 
                 node->children[i][j] = new_node;
 
-                for (uint8_t index = 0; index < to_free_len; ++index)
+                for (uint8_t index = 0; index < to_remove_len; ++index)
                 {
-                    linked_list_remove(node->data, to_free[index]);
-                    free(to_free[index]);
+                    linked_list_remove(node->data, to_remove[index]);
+                    free(to_remove[index]);
                 }
             }
         }
@@ -117,26 +119,8 @@ struct Node *find_node_by_pos(struct Node *node, Vector2 pos)
     }
     else
     {
-        uint8_t i = clamp((pos.y - node->rect.y) / (node->rect.height / 2.0), 0, 1);
-        uint8_t j = clamp((pos.x - node->rect.x) / (node->rect.width / 2.0), 0, 1);
-
-        /*if ((pos.y - node->rect.y) < (node->rect.height / 2.0)) {*/
-        /*	i = 0;*/
-        /*} else {*/
-        /*	i = 1;*/
-        /*}*/
-        /**/
-        /*if (pos.y - node->rect.y < 0 || pos.y - node->rect.y > node->rect.height) {*/
-        /*}*/
-        /**/
-        /*if (pos.x - node->rect.x < 0 || pos.x - node->rect.x > node->rect.width) {*/
-        /*}*/
-        /**/
-        /*if ((pos.x - node->rect.x) < (node->rect.width / 2.0)) {*/
-        /*	j = 0;*/
-        /*} else {*/
-        /*	j = 1;*/
-        /*}*/
+		uint8_t i = (pos.y - node->rect.y) >= (node->rect.height / 2.0);
+		uint8_t j = (pos.x - node->rect.x) >= (node->rect.width / 2.0);
 
         return find_node_by_pos(node->children[i][j], pos);
     }
@@ -178,11 +162,41 @@ void split_all(struct Node *node)
     }
 }
 
-void draw_all(struct Node *node, struct Node *head)
+void move_objects() {
+	for (uint64_t i = 0; i < N; ++i) {
+		Object *object = &objects[i];
+
+		object->pos.x += object->speed.x;
+		object->pos.y += object->speed.y;
+
+		bool bounced = false;
+
+		if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
+		{
+			object->speed.x = -object->speed.x;
+			bounced = true;
+		}
+
+		if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
+		{
+			object->speed.y = -object->speed.y;
+			bounced = true;
+		}
+
+		if (bounced) {
+			object->pos.x = clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
+			object->pos.y = clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
+		}
+
+		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->color);
+	}
+}
+
+void handle_nodes(struct Node *node, struct Node *head)
 {
     if (node->children == NULL)
     {
-        DrawRectangleLines(node->rect.x, node->rect.y, node->rect.width, node->rect.height, BLACK);
+        DrawRectangleLines(node->rect.x, node->rect.y, node->rect.width, node->rect.height, DARKGRAY);
 
         struct LinkedListNode *to_remove[node->data->len];
         uint8_t to_remove_len = 0;
@@ -191,7 +205,7 @@ void draw_all(struct Node *node, struct Node *head)
 
         while (current_node != NULL)
         {
-            Object *object = &current_node->object;
+            Object *object = &objects[current_node->element];
 
             if (!CheckCollisionPointRec(object->pos, node->rect))
             {
@@ -200,39 +214,14 @@ void draw_all(struct Node *node, struct Node *head)
                 to_remove[to_remove_len] = current_node;
                 to_remove_len++;
 
-                linked_list_push(pos_node->data, *object);
-
-                /*if (pos_node->data->len != 1) {*/
-                /*	printf("%d\n", pos_node->data->len);*/
-                /*}*/
+                linked_list_push(pos_node->data, current_node->element);
 
                 split_all(pos_node);
-                /*merge(node);*/
 
                 current_node = current_node->right;
 
                 continue;
             }
-
-            Vector2 deviation = (Vector2){SPEED * cos(object->angle), SPEED * sin(object->angle)};
-
-            object->pos.x += deviation.x;
-            object->pos.y += deviation.y;
-
-            if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
-            {
-                object->angle = M_PI - object->angle;
-                object->pos.x = clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
-                object->pos.y = clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
-            }
-
-            if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
-            {
-                object->angle = 2.0 * M_PI - object->angle;
-                object->pos.x = clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
-                object->pos.y = clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
-            }
-
             current_node = current_node->right;
 
             DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->color);
@@ -250,7 +239,7 @@ void draw_all(struct Node *node, struct Node *head)
         {
             for (uint8_t j = 0; j < 2; ++j)
             {
-                draw_all(node->children[i][j], head);
+                handle_nodes(node->children[i][j], head);
             }
         }
     }
@@ -276,12 +265,15 @@ int main()
     {
         float angle = rand_between(0, 2 * M_PI);
 
-        linked_list_push(head.data, (Object){
+
+		objects[i] = (Object){
                                         .pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
                                                          rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)},
-                                        .color = BLACK,
-                                        .angle = angle,
-                                    });
+                                        .color = GRAY,
+                                        .speed = (Vector2){ SPEED * cos(angle), SPEED * sin(angle) }
+		};
+
+        linked_list_push(head.data, i);
     }
 
     split_all(&head);
@@ -292,11 +284,12 @@ int main()
     {
         BeginDrawing();
 
-        draw_all(&head, &head);
+		move_objects();
+        handle_nodes(&head, &head);
 
         EndDrawing();
 
-        ClearBackground(RAYWHITE);
+        ClearBackground(BLACK);
     }
 
     CloseWindow();

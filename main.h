@@ -2,7 +2,7 @@ typedef struct
 {
     Vector2 pos;
     Color color;
-    float angle;
+	Vector2 speed;
     uint16_t id;
 } Object;
 
@@ -17,7 +17,7 @@ struct LinkedListNode
 {
     struct LinkedListNode *left;
     struct LinkedListNode *right;
-    Object object;
+    uint64_t element;
 };
 
 typedef enum

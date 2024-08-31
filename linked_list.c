@@ -7,13 +7,13 @@ LinkedList *linked_list_new()
     return new;
 }
 
-void linked_list_push(LinkedList *linked_list, Object object)
+void linked_list_push(LinkedList *linked_list, uint64_t element)
 {
     struct LinkedListNode *new = malloc(sizeof(struct LinkedListNode));
 
     new->right = linked_list->left;
     new->left = NULL;
-    new->object = object;
+    new->element = element;
 
     linked_list->left = new;
 
