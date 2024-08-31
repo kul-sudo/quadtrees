@@ -8,8 +8,8 @@
 #include "main.h"
 #include "linked_list.c"
 
-#define N 800
-#define MAX_LAYER 9
+#define N 400
+#define MAX_LAYER 6
 #define SPLIT_THRESHOLD 4
 
 #define SCREEN_WIDTH 1920
@@ -25,12 +25,34 @@
 
 Object objects[N * sizeof(Object)];
 
+Rectangle normalize_rect(Rectangle *rect) {
+	return (Rectangle){ rect->x + OBJECT_RADIUS * 2, rect->y + OBJECT_RADIUS * 2, rect->width - OBJECT_RADIUS * 4,
+		rect->height - OBJECT_RADIUS * 4
+	};
+}
+
 void split(struct Node *node)
 {
-    if (node->layer < MAX_LAYER && node->data->len >= SPLIT_THRESHOLD)
+
+	uint16_t len = 0;
+
+	struct LinkedListNode *current_node = node->data->left;
+
+	while (current_node != NULL)
+	{
+		Object *object = &objects[current_node->element];
+
+		if (CheckCollisionPointRec(object->pos, normalize_rect(&node->expanded_rect)))
+		{
+			len++;
+		}
+
+		current_node = current_node->right;
+	}
+
+    if (node->layer < MAX_LAYER && len >= SPLIT_THRESHOLD)
     {
         node->children = malloc(4 * sizeof(struct Node));
-
         for (uint8_t index = 0; index < 2; ++index)
         {
             node->children[index] = malloc(2 * sizeof(struct Node));
@@ -46,36 +68,12 @@ void split(struct Node *node)
                 new_node->children = NULL;
                 new_node->data = linked_list_new();
                 new_node->layer = node->layer + 1;
-                new_node->rect = (Rectangle){
-                    node->rect.x + j * node->rect.width / 2.0,
-                    node->rect.y + i * node->rect.height / 2.0,
-                    node->rect.width / 2.0,
-                    node->rect.height / 2.0,
+                new_node->expanded_rect = (Rectangle){
+                    node->expanded_rect.x + j * (node->expanded_rect.width / 2.0 - OBJECT_RADIUS * 2),
+                    node->expanded_rect.y + i * (node->expanded_rect.height / 2.0 - OBJECT_RADIUS * 2),
+                    node->expanded_rect.width / 2.0 + OBJECT_RADIUS * 2,
+                    node->expanded_rect.height / 2.0 + OBJECT_RADIUS * 2,
                 };
-
-                /*struct LinkedListNode *current_node = node->data->left;*/
-                /**/
-                /*struct LinkedListNode* to_remove[node->data->len];*/
-                /*uint8_t to_remove_len = 0;*/
-                /**/
-                /*while (current_node != NULL)*/
-                /*{*/
-                /*	Object object = current_node->object;*/
-                /**/
-                /*	if (CheckCollisionPointRec(object.pos, new_node->rect))*/
-                /*	{*/
-                /*		to_remove[to_remove_len] = current_node;*/
-                /*		to_remove_len++;*/
-                /*		linked_list_push(new_node->data, object);*/
-                /*	}*/
-                /**/
-                /*	current_node = current_node->right;*/
-                /*}*/
-                /**/
-                /**/
-                /*for (uint8_t index = 0; index < to_remove_len; ++index) {*/
-                /*	linked_list_remove(node->data, to_remove[index]);*/
-                /*}*/
 
                 struct LinkedListNode *to_remove[node->data->len];
                 uint8_t to_remove_len = 0;
@@ -86,10 +84,9 @@ void split(struct Node *node)
                 {
 					Object *object = &objects[current_node->element];
 
-                    if (CheckCollisionPointRec(object->pos, new_node->rect))
+                    if (CheckCollisionPointRec(object->pos, new_node->expanded_rect))
                     {
                         to_remove[to_remove_len] = current_node;
-
                         linked_list_push(new_node->data, current_node->element);
                     }
 
@@ -119,32 +116,12 @@ struct Node *find_node_by_pos(struct Node *node, Vector2 pos)
     }
     else
     {
-		uint8_t i = (pos.y - node->rect.y) >= (node->rect.height / 2.0);
-		uint8_t j = (pos.x - node->rect.x) >= (node->rect.width / 2.0);
+		uint8_t i = (pos.y - node->expanded_rect.y) >= (node->expanded_rect.height / 2.0);
+		uint8_t j = (pos.x - node->expanded_rect.x) >= (node->expanded_rect.width / 2.0);
 
         return find_node_by_pos(node->children[i][j], pos);
     }
 }
-
-/*struct Node *find_node_by_pos(struct Node *node, Vector2 pos)*/
-/*{*/
-/*    if (node->parent == NULL || CheckCollisionPointRec(pos, node->rect))*/
-/*    {*/
-/*        if (node->children == NULL)*/
-/*        {*/
-/*            return node;*/
-/*        }*/
-/*        else*/
-/*        {*/
-/*            uint8_t i = min((pos.y - node->rect.y) / (node->rect.height / 2.0), 1);*/
-/*            uint8_t j = min((pos.x - node->rect.x) / (node->rect.width / 2.0), 1);*/
-/**/
-/*            return find_node_by_pos(node->children[i][j], pos);*/
-/*        }*/
-/*    }*/
-/**/
-/*    return find_node_by_pos(node->parent, pos);*/
-/*}*/
 
 void split_all(struct Node *node)
 {
@@ -196,7 +173,8 @@ void handle_nodes(struct Node *node, struct Node *head)
 {
     if (node->children == NULL)
     {
-        DrawRectangleLines(node->rect.x, node->rect.y, node->rect.width, node->rect.height, DARKGRAY);
+		Rectangle normalized_rect = normalize_rect(&node->expanded_rect);
+        DrawRectangleLines(normalized_rect.x, normalized_rect.y, normalized_rect.width, normalized_rect.height, DARKGRAY);
 
         struct LinkedListNode *to_remove[node->data->len];
         uint8_t to_remove_len = 0;
@@ -207,7 +185,7 @@ void handle_nodes(struct Node *node, struct Node *head)
         {
             Object *object = &objects[current_node->element];
 
-            if (!CheckCollisionPointRec(object->pos, node->rect))
+            if (!CheckCollisionPointRec(object->pos, node->expanded_rect))
             {
                 struct Node *pos_node = find_node_by_pos(head, object->pos);
 
@@ -257,7 +235,11 @@ int main()
                         .children = NULL,
                         .data = linked_list_new(),
                         .layer = 0,
-                        .rect = (Rectangle){0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT}};
+                        .expanded_rect = (Rectangle){-OBJECT_RADIUS * 2, -OBJECT_RADIUS * 2, SCREEN_WIDTH + 
+
+OBJECT_RADIUS * 4
+			, SCREEN_HEIGHT + OBJECT_RADIUS * 4}};
+	;
 
     srand(time(NULL));
 
@@ -267,10 +249,10 @@ int main()
 
 
 		objects[i] = (Object){
-                                        .pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
-                                                         rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)},
-                                        .color = GRAY,
-                                        .speed = (Vector2){ SPEED * cos(angle), SPEED * sin(angle) }
+			.pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
+				rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)},
+			.color = GRAY,
+			.speed = (Vector2){ SPEED * cos(angle), SPEED * sin(angle) }
 		};
 
         linked_list_push(head.data, i);

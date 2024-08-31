@@ -20,18 +20,11 @@ struct LinkedListNode
     uint64_t element;
 };
 
-typedef enum
-{
-    HEAD,
-    NODE,
-    LEAF
-} NodeType;
-
 struct Node
 {
     struct Node *parent;
     struct Node ***children;
     LinkedList *data;
     uint16_t layer;
-    Rectangle rect;
+    Rectangle expanded_rect;
 };
