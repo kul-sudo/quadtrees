@@ -1,10 +1,12 @@
 #include <math.h>
 #include <raylib.h>
+#include <raymath.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <float.h>
 #include "main.h"
 #include "linked_list.c"
 
@@ -19,9 +21,7 @@
 #define SPEED 0.1
 
 #define min(a, b) (a < b ? a : b)
-#define max(a, b) (a > b ? a : b)
-
-#define clamp(value, min_value, max_value) min(max(value, min_value), max_value)
+#define max(a, b) (a > b ? a : b
 
 Object objects[N * sizeof(Object)];
 
@@ -31,13 +31,33 @@ Rectangle normalize_rect(Rectangle *rect)
                        rect->height - OBJECT_RADIUS * 4};
 }
 
-size_t from_2d(size_t i, size_t j) {
-	return i * 2 + j;
+size_t from_2d(size_t i, size_t j)
+{
+    return i * 2 + j;
+}
+
+typedef struct {
+	Vector2 new_speed_info;
+	float new_speed_info_length;
+} SpeedInfo;
+
+SpeedInfo get_speed_info(Object *lhs_object, Object *rhs_object, float distance_squared) {
+	Vector2 a = Vector2Scale(lhs_object->speed, distance_squared);
+	Vector2 b = Vector2Subtract(lhs_object->pos, rhs_object->pos);
+
+	float c = Vector2DotProduct(Vector2Subtract(lhs_object->speed, rhs_object->speed), b);
+	Vector2 e = Vector2Scale(b, c);
+
+	Vector2 subtracted = Vector2Subtract(a, e);
+
+	return (SpeedInfo){
+		subtracted,
+		Vector2Length(subtracted),
+	};
 }
 
 void split(struct Node *node)
 {
-
     size_t len = 0;
 
     struct LinkedListNode *current_node = node->data->left;
@@ -114,73 +134,140 @@ void split_all(struct Node *node)
     }
 }
 
+void adjust_speeds(struct Node *node) {
+	if (node->children == NULL) {
+		Rectangle normalized_rect = normalize_rect(&node->expanded_rect);
+		struct LinkedListNode *current_node = node->data->left;
+
+		while (current_node != NULL)
+		{
+			Object *object = &objects[current_node->element];
+			object->is_in_normalized_rect = CheckCollisionPointRec(object->pos, normalized_rect);
+			current_node = current_node->right;
+		}
+
+		current_node = node->data->left;
+		while (current_node != NULL)
+		{
+			Object *object = &objects[current_node->element];
+
+			object->edge_collided = false;
+
+			if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
+			{
+				object->speed.x = -object->speed.x;
+				object->edge_collided = true;
+			}
+
+			if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
+			{
+				object->speed.y = -object->speed.y;
+				object->edge_collided = true;
+			}
+
+			if (object->edge_collided || object->overlapped_object_id != -1) {
+				goto next;
+			}
+
+			struct LinkedListNode *current_node_nested = node->data->left;
+			while (current_node_nested->element != current_node->element)
+			{
+				Object *object_nested = &objects[current_node_nested->element];
+				if (object_nested->edge_collided || object_nested->overlapped_object_id != -1 || (
+					!object->is_in_normalized_rect && !object_nested->is_in_normalized_rect
+				)) {
+					goto next_nested;
+				}
+
+				float distance = Vector2Distance(object->pos, object_nested->pos);
+				if (distance < OBJECT_RADIUS * 2) {
+					float distance_squared = pow(distance, 2);
+					SpeedInfo object_speed_info = get_speed_info(object, object_nested, distance_squared);
+					SpeedInfo object_nested_speed_info = get_speed_info(object_nested, object, distance_squared);
+
+					if (distance_squared > FLT_MIN || object_speed_info.new_speed_info_length > distance_squared * FLT_MAX ||
+						object_nested_speed_info.new_speed_info_length > distance_squared * FLT_MAX
+					) {
+						object->speed = (Vector2){ 0 };
+						object_nested->speed = (Vector2){ 0 };
+					} else {
+						object->speed = Vector2Scale(object_speed_info.new_speed_info, 1 / distance_squared);
+						object_nested->speed = Vector2Scale(object_nested_speed_info.new_speed_info, 1 / distance_squared);
+
+						object->overlapped_object_id = current_node_nested->element;
+						object_nested->overlapped_object_id = current_node->element;
+						goto next;
+					}
+				}
+
+				next_nested:
+					current_node_nested = current_node_nested->right;
+			}
+
+			next:
+				current_node = current_node->right;
+		}
+	} else {
+        for (size_t i = 0; i < 2; ++i)
+        {
+            for (size_t j = 0; j < 2; ++j)
+            {
+				adjust_speeds(node->children[from_2d(i, j)]);
+            }
+        }
+	}
+}
+
 void move_objects()
 {
-    for (size_t i = 0; i < N; ++i)
-    {
-        Object *object = &objects[i];
+	for (size_t i = 0; i < N; ++i)
+	{
+		Object *object = &objects[i];
 
-        object->pos.x += object->speed.x;
-        object->pos.y += object->speed.y;
+		object->pos.x += object->speed.x;
+		object->pos.y += object->speed.y;
 
-        bool bounced = false;
+		object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
+		object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
 
-        if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
-        {
-            object->speed.x = -object->speed.x;
-            bounced = true;
-        }
-
-        if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
-        {
-            object->speed.y = -object->speed.y;
-            bounced = true;
-        }
-
-        if (bounced)
-        {
-            object->pos.x = clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
-            object->pos.y = clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
-        }
-
-        DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->color);
-    }
+		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, GRAY);
+	}
 }
 
 void free_tree(struct Node *node)
 {
-	if (node->children != NULL)
-	{
-		for (size_t i = 0; i < 2; ++i)
-		{
-			for (size_t j = 0; j < 2; ++j)
-			{
-				struct Node *child = node->children[from_2d(i, j)];
+    if (node->children != NULL)
+    {
+        for (size_t i = 0; i < 2; ++i)
+        {
+            for (size_t j = 0; j < 2; ++j)
+            {
+                struct Node *child = node->children[from_2d(i, j)];
 
-				free_tree(child);
-	
-				struct LinkedListNode *current_node = child->data->left;
+                free_tree(child);
 
-				while (current_node != NULL)
-				{
-					struct LinkedListNode *next_node = current_node->right;
+                struct LinkedListNode *current_node = child->data->left;
 
-					free(current_node);
+                while (current_node != NULL)
+                {
+                    struct LinkedListNode *next_node = current_node->right;
 
-					current_node = next_node;
-				}
+                    free(current_node);
 
-				free(child->data);
-				free(child->children);
-				free(child);
-			}
-		}
-	}
+                    current_node = next_node;
+                }
+
+                free(child->data);
+                free(child->children);
+                free(child);
+            }
+        }
+    }
 }
 
 bool tree_rebuild_needed = false;
 
-void handle_nodes(struct Node *node, struct Node *head)
+void handle_nodes(struct Node *node)
 {
     if (node->children == NULL)
     {
@@ -201,7 +288,7 @@ void handle_nodes(struct Node *node, struct Node *head)
 
             current_node = current_node->right;
 
-            DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->color);
+            DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, GRAY);
         }
     }
     else
@@ -210,7 +297,7 @@ void handle_nodes(struct Node *node, struct Node *head)
         {
             for (size_t j = 0; j < 2; ++j)
             {
-                handle_nodes(node->children[from_2d(i, j)], head);
+                handle_nodes(node->children[from_2d(i, j)]);
             }
         }
     }
@@ -222,30 +309,45 @@ float rand_between(float min, float max)
     return min + ((float)rand() / (float)RAND_MAX) * (max - min);
 }
 
-float Vector2Distance(Vector2 lhs, Vector2 rhs) {
-	return sqrt(pow((lhs.x - rhs.x), 2) + pow((lhs.y - rhs.y), 2));
+Vector2 find_position(struct Node *head)
+{
+    Vector2 pos;
+
+    while (true)
+    {
+        pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
+                        rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)};
+
+        bool found = true;
+        for (size_t index = 0; index < head->data->len; ++index)
+        {
+            if (Vector2Distance(objects[index].pos, pos) < OBJECT_RADIUS * 2)
+            {
+                found = false;
+                break;
+            }
+        }
+
+        if (found)
+        {
+            return pos;
+        }
+    }
 }
 
-Vector2 find_position(struct Node *head) {
-	Vector2 pos;
+void overlapped_info_cleanup()
+{
+    for (size_t i = 0; i < N; ++i)
+    {
+        Object *object = &objects[i];
 
-	while (true) {
-		pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
-			rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)};
-
-		bool found = true;
-		for (size_t index = 0; index < head->data->len; ++index) {
-			if (Vector2Distance(objects[index].pos, pos) <= OBJECT_RADIUS * 2) {
-				found = false;
-				break;
-			}
-		}
-
-		if (found) {
-			return pos;
-		}
-	}
-
+		if (object->overlapped_object_id != -1 &&
+		          Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2)
+		      {
+		          object->overlapped_object_id = -1;
+		          objects[object->overlapped_object_id].overlapped_object_id = -1;
+		      }
+    }
 }
 
 int main()
@@ -265,11 +367,15 @@ int main()
     {
         float angle = rand_between(0, 2 * M_PI);
 
-        objects[i] = (Object){.pos = find_position(&head),
-                              .color = GRAY,
-                              .speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)}};
+        objects[i] = (Object){
+            .pos = find_position(&head),
+            .speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
+            .edge_collided = false,
+            .overlapped_object_id = -1,
+			.is_in_normalized_rect = false
+        };
 
-		linked_list_push(head.data, i);
+        linked_list_push(head.data, i);
     }
 
     split_all(&head);
@@ -280,8 +386,11 @@ int main()
     {
         BeginDrawing();
 
-        move_objects();
-        handle_nodes(&head, &head);
+        overlapped_info_cleanup();
+        
+		adjust_speeds(&head);
+   		move_objects();
+		handle_nodes(&head);
 
         if (tree_rebuild_needed)
         {

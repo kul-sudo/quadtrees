@@ -1,9 +1,11 @@
 typedef struct
 {
     Vector2 pos;
-    Color color;
 	Vector2 speed;
-    size_t id;
+	ssize_t id;
+	ssize_t overlapped_object_id;
+	bool edge_collided;
+	bool is_in_normalized_rect;
 } Object;
 
 /// Stack-based
