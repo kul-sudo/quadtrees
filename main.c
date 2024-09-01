@@ -16,12 +16,9 @@
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 3
+#define OBJECT_RADIUS 10
 
-#define SPEED 0.1
-
-#define min(a, b) (a < b ? a : b)
-#define max(a, b) (a > b ? a : b
+#define SPEED 0.05
 
 Object objects[N * sizeof(Object)];
 
@@ -36,24 +33,15 @@ size_t from_2d(size_t i, size_t j)
     return i * 2 + j;
 }
 
-typedef struct {
-	Vector2 new_speed_info;
-	float new_speed_info_length;
-} SpeedInfo;
-
-SpeedInfo get_speed_info(Object *lhs_object, Object *rhs_object, float distance_squared) {
+Vector2 get_speed(Object *lhs_object, Object *rhs_object, float distance_squared) {
 	Vector2 a = Vector2Scale(lhs_object->speed, distance_squared);
 	Vector2 b = Vector2Subtract(lhs_object->pos, rhs_object->pos);
 
 	float c = Vector2DotProduct(Vector2Subtract(lhs_object->speed, rhs_object->speed), b);
 	Vector2 e = Vector2Scale(b, c);
+	Vector2 d = Vector2Subtract(a, e);
 
-	Vector2 subtracted = Vector2Subtract(a, e);
-
-	return (SpeedInfo){
-		subtracted,
-		Vector2Length(subtracted),
-	};
+	return Vector2Scale(d, 1 / distance_squared);
 }
 
 void split(struct Node *node)
@@ -153,19 +141,22 @@ void adjust_speeds(struct Node *node) {
 
 			object->edge_collided = false;
 
-			if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
+			if (object->pos.x <= OBJECT_RADIUS || object->pos.x >= SCREEN_WIDTH - OBJECT_RADIUS)
 			{
 				object->speed.x = -object->speed.x;
 				object->edge_collided = true;
 			}
 
-			if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
+			if (object->pos.y <= OBJECT_RADIUS || object->pos.y >= SCREEN_HEIGHT - OBJECT_RADIUS)
 			{
 				object->speed.y = -object->speed.y;
 				object->edge_collided = true;
 			}
 
-			if (object->edge_collided || object->overlapped_object_id != -1) {
+			if (object->edge_collided) {
+					objects[object->overlapped_object_id].overlapped_object_id = -1;
+					object->overlapped_object_id = -1;
+
 				goto next;
 			}
 
@@ -181,23 +172,17 @@ void adjust_speeds(struct Node *node) {
 
 				float distance = Vector2Distance(object->pos, object_nested->pos);
 				if (distance < OBJECT_RADIUS * 2) {
-					float distance_squared = pow(distance, 2);
-					SpeedInfo object_speed_info = get_speed_info(object, object_nested, distance_squared);
-					SpeedInfo object_nested_speed_info = get_speed_info(object_nested, object, distance_squared);
+					object->speed = (Vector2){ SPEED, 0 };
+					object_nested->speed = (Vector2){ -SPEED, 0 };
 
-					if (distance_squared > FLT_MIN || object_speed_info.new_speed_info_length > distance_squared * FLT_MAX ||
-						object_nested_speed_info.new_speed_info_length > distance_squared * FLT_MAX
-					) {
-						object->speed = (Vector2){ 0 };
-						object_nested->speed = (Vector2){ 0 };
-					} else {
-						object->speed = Vector2Scale(object_speed_info.new_speed_info, 1 / distance_squared);
-						object_nested->speed = Vector2Scale(object_nested_speed_info.new_speed_info, 1 / distance_squared);
+					/*float distance_squared = pow(distance, 2);*/
 
-						object->overlapped_object_id = current_node_nested->element;
-						object_nested->overlapped_object_id = current_node->element;
-						goto next;
-					}
+					/*object->speed = get_speed(object, object_nested, distance_squared);*/
+					/*object_nested->speed = get_speed(object_nested, object, distance_squared);*/
+
+					object->overlapped_object_id = current_node_nested->element;
+					object_nested->overlapped_object_id = current_node->element;
+					goto next;
 				}
 
 				next_nested:
@@ -227,10 +212,10 @@ void move_objects()
 		object->pos.x += object->speed.x;
 		object->pos.y += object->speed.y;
 
-		object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
-		object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
+		object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS + 5.0, SCREEN_WIDTH - OBJECT_RADIUS - 5.0);
+		object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS + 5.0, SCREEN_HEIGHT - OBJECT_RADIUS - 5.0);
 
-		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, GRAY);
+		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, !object->edge_collided ? GRAY : RED);
 	}
 }
 
@@ -287,8 +272,6 @@ void handle_nodes(struct Node *node)
             }
 
             current_node = current_node->right;
-
-            DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, GRAY);
         }
     }
     else
@@ -363,20 +346,37 @@ int main()
 
     srand(time(NULL));
 
-    for (size_t i = 0; i < N; ++i)
-    {
-        float angle = rand_between(0, 2 * M_PI);
 
-        objects[i] = (Object){
-            .pos = find_position(&head),
-            .speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
-            .edge_collided = false,
-            .overlapped_object_id = -1,
+/*	objects[0] = (Object){*/
+/*		.pos = (Vector2){ 500 + OBJECT_RADIUS, 500 },*/
+/*		.speed = (Vector2){-SPEED, 0},*/
+/*		.edge_collided = false,*/
+/*		.overlapped_object_id = -1,*/
+/*	}*/
+/*;*/
+/*			     linked_list_push(head.data, 0);*/
+/*	objects[1] = (Object){*/
+/*		.pos = (Vector2){ 500, 500 },*/
+/*		.speed = (Vector2){SPEED, 0},*/
+/*		.edge_collided = false,*/
+/*		.overlapped_object_id = -1,*/
+/*	};*/
+/**/
+/*			     linked_list_push(head.data, 1);*/
+	for (size_t i = 0; i < N; ++i)
+	{
+		float angle = rand_between(0, 2 * M_PI);
+
+		objects[i] = (Object){
+			.pos = find_position(&head),
+			.speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
+			.edge_collided = false,
+			.overlapped_object_id = -1,
 			.is_in_normalized_rect = false
-        };
+		};
 
-        linked_list_push(head.data, i);
-    }
+		linked_list_push(head.data, i);
+	}
 
     split_all(&head);
 
