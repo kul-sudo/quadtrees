@@ -7,7 +7,7 @@ LinkedList *linked_list_new()
     return new;
 }
 
-void linked_list_push(LinkedList *linked_list, uint64_t element)
+void linked_list_push(LinkedList *linked_list, size_t element)
 {
     struct LinkedListNode *new = malloc(sizeof(struct LinkedListNode));
 
@@ -51,4 +51,5 @@ void linked_list_remove(LinkedList *linked_list, struct LinkedListNode *linked_l
     }
 
     linked_list->len--;
+	/*free(linked_list_node);*/
 }
