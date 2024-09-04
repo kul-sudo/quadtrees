@@ -10,15 +10,17 @@
 #include "main.h"
 #include "linked_list.c"
 
-#define N 99
-#define MAX_LAYER 0
-#define SPLIT_THRESHOLD 2
+#define N 10000
+#define MAX_LAYER 10
+#define SPLIT_THRESHOLD 10
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 3
+#define OBJECT_RADIUS 2
 
-#define SPEED 0.1
+#define SPEED 1
+
+#define SCREEN_CONST 0.2
 
 Object objects[N * sizeof(Object)];
 
@@ -140,10 +142,12 @@ void adjust_speeds(struct Node *node) {
 			Object *object = &objects[current_object->element];
 
 			if (object->edge_collided || object->overlapped_object_id != -1) {
-				goto next;
+				current_object = current_object->right;
+				continue;
 			}
 
 			struct LinkedListNode *current_object_nested = node->data->left;
+
 			while (current_object_nested->element != current_object->element)
 			{
 				Object *object_nested = &objects[current_object_nested->element];
@@ -151,27 +155,30 @@ void adjust_speeds(struct Node *node) {
 				(
 					!object->is_in_normalized_rect && !object_nested->is_in_normalized_rect
 				)) {
-					goto next_nested;
+					current_object_nested = current_object_nested->right;
+					continue;
 				}
 
 				float distance = Vector2Distance(object->pos, object_nested->pos);
 				if (distance < OBJECT_RADIUS * 2) {
 					float distance_squared = pow(distance, 2);
 
-					object->speed = get_speed(object, object_nested, distance_squared);
-					object_nested->speed = get_speed(object_nested, object, distance_squared);
+					Vector2 object_nested_speed = get_speed(object_nested, object, distance_squared);
+					Vector2 object_speed = get_speed(object, object_nested, distance_squared);
 
-					object->overlapped_object_id = current_object_nested->element;
+					object->speed = object_speed;
+					object_nested->speed = object_nested_speed;
+
 					object_nested->overlapped_object_id = current_object->element;
-					goto next;
+					object->overlapped_object_id = current_object_nested->element;
+					
+					break;
 				}
 
-				next_nested:
-					current_object_nested = current_object_nested->right;
+				current_object_nested = current_object_nested->right;
 			}
 
-			next:
-				current_object = current_object->right;
+			current_object = current_object->right;
 		}
 	} else {
         for (size_t i = 0; i < 2; ++i)
@@ -281,8 +288,8 @@ Vector2 find_position(struct Node *head)
 
     while (true)
     {
-        pos = (Vector2){rand_between(OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS),
-                        rand_between(OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS)};
+        pos = (Vector2){rand_between(SCREEN_WIDTH / 2 - SCREEN_WIDTH * SCREEN_CONST, SCREEN_WIDTH / 2 + SCREEN_WIDTH * SCREEN_CONST),
+                        rand_between(SCREEN_HEIGHT / 2 - SCREEN_HEIGHT * SCREEN_CONST, SCREEN_HEIGHT / 2 + SCREEN_HEIGHT * SCREEN_CONST)};
 
         bool found = true;
         for (size_t index = 0; index < head->data->len; ++index)
@@ -321,11 +328,9 @@ void overlapped_info_cleanup()
 			object->edge_collided = true;
 		}
 
-		if (object->overlapped_object_id != -1 &&
-			(object->edge_collided || Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2))
-		{
-			object->overlapped_object_id = -1;
+		if (object->edge_collided || (object->overlapped_object_id != -1 && Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2)) {
 			objects[object->overlapped_object_id].overlapped_object_id = -1;
+			object->overlapped_object_id = -1;
 		}
 	}
 }
