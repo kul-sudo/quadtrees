@@ -10,15 +10,15 @@
 #include "main.h"
 #include "linked_list.c"
 
-#define N 400
-#define MAX_LAYER 9
+#define N 99
+#define MAX_LAYER 0
 #define SPLIT_THRESHOLD 2
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 10
+#define OBJECT_RADIUS 3
 
-#define SPEED 0.05
+#define SPEED 0.1
 
 Object objects[N * sizeof(Object)];
 
@@ -125,46 +125,30 @@ void split_all(struct Node *node)
 void adjust_speeds(struct Node *node) {
 	if (node->children == NULL) {
 		Rectangle normalized_rect = normalize_rect(&node->expanded_rect);
-		struct LinkedListNode *current_node = node->data->left;
+		struct LinkedListNode *current_object = node->data->left;
 
-		while (current_node != NULL)
+		while (current_object != NULL)
 		{
-			Object *object = &objects[current_node->element];
+			Object *object = &objects[current_object->element];
 			object->is_in_normalized_rect = CheckCollisionPointRec(object->pos, normalized_rect);
-			current_node = current_node->right;
+			current_object = current_object->right;
 		}
 
-		current_node = node->data->left;
-		while (current_node != NULL)
+		current_object = node->data->left;
+		while (current_object != NULL)
 		{
-			Object *object = &objects[current_node->element];
+			Object *object = &objects[current_object->element];
 
-			object->edge_collided = false;
-
-			if (object->pos.x <= OBJECT_RADIUS || object->pos.x >= SCREEN_WIDTH - OBJECT_RADIUS)
-			{
-				object->speed.x = -object->speed.x;
-				object->edge_collided = true;
-			}
-
-			if (object->pos.y <= OBJECT_RADIUS || object->pos.y >= SCREEN_HEIGHT - OBJECT_RADIUS)
-			{
-				object->speed.y = -object->speed.y;
-				object->edge_collided = true;
-			}
-
-			if (object->edge_collided) {
-					objects[object->overlapped_object_id].overlapped_object_id = -1;
-					object->overlapped_object_id = -1;
-
+			if (object->edge_collided || object->overlapped_object_id != -1) {
 				goto next;
 			}
 
-			struct LinkedListNode *current_node_nested = node->data->left;
-			while (current_node_nested->element != current_node->element)
+			struct LinkedListNode *current_object_nested = node->data->left;
+			while (current_object_nested->element != current_object->element)
 			{
-				Object *object_nested = &objects[current_node_nested->element];
-				if (object_nested->edge_collided || object_nested->overlapped_object_id != -1 || (
+				Object *object_nested = &objects[current_object_nested->element];
+				if (object_nested->edge_collided || object_nested->overlapped_object_id != -1 ||
+				(
 					!object->is_in_normalized_rect && !object_nested->is_in_normalized_rect
 				)) {
 					goto next_nested;
@@ -172,25 +156,22 @@ void adjust_speeds(struct Node *node) {
 
 				float distance = Vector2Distance(object->pos, object_nested->pos);
 				if (distance < OBJECT_RADIUS * 2) {
-					object->speed = (Vector2){ SPEED, 0 };
-					object_nested->speed = (Vector2){ -SPEED, 0 };
+					float distance_squared = pow(distance, 2);
 
-					/*float distance_squared = pow(distance, 2);*/
+					object->speed = get_speed(object, object_nested, distance_squared);
+					object_nested->speed = get_speed(object_nested, object, distance_squared);
 
-					/*object->speed = get_speed(object, object_nested, distance_squared);*/
-					/*object_nested->speed = get_speed(object_nested, object, distance_squared);*/
-
-					object->overlapped_object_id = current_node_nested->element;
-					object_nested->overlapped_object_id = current_node->element;
+					object->overlapped_object_id = current_object_nested->element;
+					object_nested->overlapped_object_id = current_object->element;
 					goto next;
 				}
 
 				next_nested:
-					current_node_nested = current_node_nested->right;
+					current_object_nested = current_object_nested->right;
 			}
 
 			next:
-				current_node = current_node->right;
+				current_object = current_object->right;
 		}
 	} else {
         for (size_t i = 0; i < 2; ++i)
@@ -212,10 +193,12 @@ void move_objects()
 		object->pos.x += object->speed.x;
 		object->pos.y += object->speed.y;
 
-		object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS + 5.0, SCREEN_WIDTH - OBJECT_RADIUS - 5.0);
-		object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS + 5.0, SCREEN_HEIGHT - OBJECT_RADIUS - 5.0);
+		if (object->edge_collided) {
+			object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS, SCREEN_WIDTH - OBJECT_RADIUS);
+			object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS, SCREEN_HEIGHT - OBJECT_RADIUS);
+		}
 
-		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, !object->edge_collided ? GRAY : RED);
+		DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->overlapped_object_id == -1 ? GRAY : RED);
 	}
 }
 
@@ -324,13 +307,27 @@ void overlapped_info_cleanup()
     {
         Object *object = &objects[i];
 
+		object->edge_collided = false;
+
+		if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
+		{
+			object->speed.x = -object->speed.x;
+			object->edge_collided = true;
+		}
+
+		if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
+		{
+			object->speed.y = -object->speed.y;
+			object->edge_collided = true;
+		}
+
 		if (object->overlapped_object_id != -1 &&
-		          Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2)
-		      {
-		          object->overlapped_object_id = -1;
-		          objects[object->overlapped_object_id].overlapped_object_id = -1;
-		      }
-    }
+			(object->edge_collided || Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2))
+		{
+			object->overlapped_object_id = -1;
+			objects[object->overlapped_object_id].overlapped_object_id = -1;
+		}
+	}
 }
 
 int main()
