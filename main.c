@@ -10,29 +10,29 @@
 #include "main.h"
 #include "linked_list.c"
 
-/*#define N 31000*/
-/*#define MAX_LAYER 10*/
-/*#define SPLIT_THRESHOLD 30*/
-/**/
-/*#define SCREEN_WIDTH 1920*/
-/*#define SCREEN_HEIGHT 1080*/
-/*#define OBJECT_RADIUS 1*/
-/**/
-/*#define SPEED 0.4*/
-/**/
-/*#define SCREEN_CONST 1.0*/
-
-#define N 31000
+#define N 15500
 #define MAX_LAYER 10
-#define SPLIT_THRESHOLD 30
+#define SPLIT_THRESHOLD 8
 
 #define SCREEN_WIDTH 1920
 #define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 1
+#define OBJECT_RADIUS 2
 
 #define SPEED 0.4
 
-#define SCREEN_CONST 0.4
+#define SCREEN_CONST 0.45
+
+/*#define N 4*/
+/*#define MAX_LAYER 1*/
+/*#define SPLIT_THRESHOLD 1*/
+/**/
+/*#define SCREEN_WIDTH 1920*/
+/*#define SCREEN_HEIGHT 1080*/
+/*#define OBJECT_RADIUS 180*/
+/**/
+/*#define SPEED 0.1*/
+/**/
+/*#define SCREEN_CONST 1.45*/
 
 Object objects[N * sizeof(Object)];
 
