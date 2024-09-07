@@ -18,19 +18,19 @@
 #define SCREEN_HEIGHT 1080
 #define OBJECT_RADIUS 2
 
-#define SPEED 0.4
+#define SPEED 3
 
 #define SCREEN_CONST 0.45
 
-/*#define N 4*/
-/*#define MAX_LAYER 1*/
-/*#define SPLIT_THRESHOLD 1*/
+/*#define N 50*/
+/*#define MAX_LAYER 10*/
+/*#define SPLIT_THRESHOLD 8*/
 /**/
 /*#define SCREEN_WIDTH 1920*/
 /*#define SCREEN_HEIGHT 1080*/
-/*#define OBJECT_RADIUS 180*/
+/*#define OBJECT_RADIUS 80*/
 /**/
-/*#define SPEED 0.1*/
+/*#define SPEED 0.4*/
 /**/
 /*#define SCREEN_CONST 1.45*/
 
@@ -405,7 +405,7 @@ int main()
 		clocks += clock() - before;
 		cycles++;
 
-		DrawText(TextFormat("%.1e", (float)(clocks / cycles)), 10, 10, 40, WHITE);
+		/*DrawText(TextFormat("%.1e", (float)(clocks / cycles)), 10, 10, 40, WHITE);*/
         
 		if (tree_rebuild_needed)
         {
