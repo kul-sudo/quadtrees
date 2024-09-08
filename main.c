@@ -30,7 +30,7 @@
 #define SCREEN_HEIGHT 1080
 #define OBJECT_RADIUS 2
 
-#define BOSS_RADIUS 20
+#define BOSS_RADIUS 10
 #define BOSS_SPEED 1
 #define GRAVITY 120
 
