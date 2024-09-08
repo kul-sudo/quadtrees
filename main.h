@@ -30,3 +30,8 @@ struct Node
     size_t layer;
     Rectangle expanded_rect;
 };
+
+typedef struct {
+	Vector2 pos;
+	Vector2 speed;
+} Boss;

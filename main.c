@@ -10,31 +10,36 @@
 #include "main.h"
 #include "linked_list.c"
 
-#define N 15500
-#define MAX_LAYER 10
-#define SPLIT_THRESHOLD 8
-
-#define SCREEN_WIDTH 1920
-#define SCREEN_HEIGHT 1080
-#define OBJECT_RADIUS 2
-
-#define SPEED 3
-
-#define SCREEN_CONST 0.45
-
-/*#define N 50*/
+/*#define N 15500*/
 /*#define MAX_LAYER 10*/
 /*#define SPLIT_THRESHOLD 8*/
 /**/
 /*#define SCREEN_WIDTH 1920*/
 /*#define SCREEN_HEIGHT 1080*/
-/*#define OBJECT_RADIUS 80*/
+/*#define OBJECT_RADIUS 2*/
 /**/
-/*#define SPEED 0.4*/
+/*#define SPEED 0.1*/
 /**/
-/*#define SCREEN_CONST 1.45*/
+/*#define SCREEN_CONST 0.45*/
+
+#define N 15500
+#define USE_CELLS true
+#define G 10
+
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1080
+#define OBJECT_RADIUS 2
+
+#define BOSS_RADIUS 20
+#define BOSS_SPEED 1
+#define GRAVITY 120
+
+#define SPEED 0.1
+
+#define SCREEN_CONST 0.44
 
 Object objects[N * sizeof(Object)];
+Boss boss;
 
 Rectangle normalize_rect(Rectangle *rect)
 {
@@ -61,6 +66,10 @@ Vector2 get_speed(Object *lhs_object, Object *rhs_object, float distance_squared
 
 void split(struct Node *node)
 {
+	if (!USE_CELLS) {
+		return;
+	}
+
     size_t len = 0;
 
     struct LinkedListNode *current_node = node->data->left;
@@ -77,7 +86,11 @@ void split(struct Node *node)
         current_node = current_node->right;
     }
 
-    if (node->layer < MAX_LAYER && len >= SPLIT_THRESHOLD)
+	float wb = node->expanded_rect.width / (OBJECT_RADIUS * 4);
+	float hb = node->expanded_rect.height / (OBJECT_RADIUS * 4);
+	float b = ((wb + 1) * (hb + 1)) / (4 * wb * hb);
+
+	if ((len * b) >= 1 && len * (1 - 4 * pow(b, 2)) > G)
     {
         node->children = malloc(sizeof(struct Node[2][2]));
 
@@ -135,6 +148,14 @@ void split_all(struct Node *node)
             }
         }
     }
+}
+
+void adjust_speed_to_boss(Object *object) {
+	float distance_to_boss = Vector2Distance(object->pos, boss.pos);
+
+	object->speed = Vector2Add(object->speed, Vector2Scale(Vector2Subtract(boss.pos, object->pos),
+							GRAVITY / pow(distance_to_boss, 3)
+							));
 }
 
 void handle_collisions(struct Node *node)
@@ -214,6 +235,8 @@ void move_objects()
     for (size_t i = 0; i < N; ++i)
     {
         Object *object = &objects[i];
+		
+		adjust_speed_to_boss(object);
 
         object->pos.x += object->speed.x;
         object->pos.y += object->speed.y;
@@ -226,6 +249,25 @@ void move_objects()
 
         DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, DARKGREEN);
     }
+}
+
+void move_boss() {
+	boss.pos.x += boss.speed.x;
+	boss.pos.y += boss.speed.y;
+
+	if (boss.pos.x < -BOSS_RADIUS)
+	{
+		boss.pos.x = SCREEN_WIDTH + BOSS_RADIUS;
+	} else if (boss.pos.x > SCREEN_WIDTH + BOSS_RADIUS) {
+		boss.pos.x = -BOSS_RADIUS;
+	}
+
+	if (boss.pos.y < -BOSS_RADIUS)
+	{
+		boss.pos.y = SCREEN_HEIGHT + BOSS_RADIUS;
+	} else if (boss.pos.y > SCREEN_HEIGHT + BOSS_RADIUS) {
+		boss.pos.y = -BOSS_RADIUS;
+	}
 }
 
 void free_tree(struct Node *node)
@@ -337,15 +379,17 @@ void overlapped_info_cleanup()
 
         if (object->pos.x < OBJECT_RADIUS || object->pos.x > SCREEN_WIDTH - OBJECT_RADIUS)
         {
-            object->speed.x = -object->speed.x;
             object->edge_collided = true;
         }
 
         if (object->pos.y < OBJECT_RADIUS || object->pos.y > SCREEN_HEIGHT - OBJECT_RADIUS)
         {
-            object->speed.y = -object->speed.y;
             object->edge_collided = true;
         }
+
+		if (object->edge_collided) {
+			object->speed = (Vector2) { 0, 0 };
+		}
 
         if (object->overlapped_object_id != -1 &&
             (object->edge_collided ||
@@ -370,6 +414,12 @@ int main()
 
     srand(time(NULL));
 
+    float boss_angle = rand_between(0, 2 * M_PI);
+	boss = (Boss){
+		(Vector2) { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 },
+		(Vector2) { BOSS_SPEED * cos(boss_angle), BOSS_SPEED * sin(boss_angle) }
+	};
+
     for (size_t i = 0; i < N; ++i)
     {
         float angle = rand_between(0, 2 * M_PI);
@@ -387,16 +437,16 @@ int main()
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "raylib [core] example - basic window");
 
-    size_t clocks = 0;
-	size_t cycles = 0;
+    __int128_t clocks = 0;
+	__int128_t cycles = 0;
 	
     while (!WindowShouldClose())
     {
+        BeginDrawing();
+
 		size_t before = clock();
 
         overlapped_info_cleanup();
-
-        BeginDrawing();
 
         handle_collisions(&head);
 		handle_nodes(&head);
@@ -405,20 +455,24 @@ int main()
 		clocks += clock() - before;
 		cycles++;
 
-		/*DrawText(TextFormat("%.1e", (float)(clocks / cycles)), 10, 10, 40, WHITE);*/
+		DrawText(TextFormat("%.1e", (float)(clocks / cycles)), 10, 10, 40, WHITE);
         
-		if (tree_rebuild_needed)
-        {
-            free_tree(&head);
-
-            srand(time(NULL));
-
-            split_all(&head);
-
-            tree_rebuild_needed = false;
-        }
+		DrawCircle(boss.pos.x, boss.pos.y, BOSS_RADIUS, YELLOW);
 
         EndDrawing();
+
+		move_boss();
+		
+		if (tree_rebuild_needed)
+		{
+			free_tree(&head);
+
+			srand(time(NULL));
+
+			split_all(&head);
+
+			tree_rebuild_needed = false;
+		}
 
         ClearBackground(BLACK);
     }
