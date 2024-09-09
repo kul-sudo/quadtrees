@@ -14,6 +14,8 @@
 #define USE_CELLS true
 #define G 10
 
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1080
 #define OBJECT_RADIUS 3
 /*#define OBJECT_RADIUS 2*/
 
@@ -28,6 +30,8 @@
 /*#define SCREEN_CONST 0.5*/
 
 Object objects[N * sizeof(Object)];
+size_t objects_len = N;
+
 Boss boss;
 Vector2 screen_size;
 
@@ -232,29 +236,15 @@ void move_objects()
         object->pos.x += object->speed.x;
         object->pos.y += object->speed.y;
 
-		if (isnan(object->pos.x) || isnan(object->pos.y)) {
-			if (boss.pos.x > screen_size.x / 2) {
-				object->pos.x = OBJECT_RADIUS;
-			} else {
-				object->pos.x = screen_size.x - OBJECT_RADIUS;
-			}
-			
-			if (boss.pos.y > screen_size.y / 2) {
-				object->pos.y = OBJECT_RADIUS;
-			} else {
-				object->pos.y = screen_size.y - OBJECT_RADIUS;
-			}
+		/*if (isnan(object->pos.x) || isnan(object->pos.y)) {*/
+		/*	for (size_t k = i; k < objects_len; ++k) {*/
+		/*		objects[k] = objects[k + 1];*/
+		/*	}*/
+		/**/
+		/*	objects_len--;*/
+		/*}*/
 
-			object->edge_collided = true;
-
-			if (object->overlapped_object_id != -1)
-			{
-				objects[object->overlapped_object_id].overlapped_object_id = -1;
-				object->overlapped_object_id = -1;
-			}
-		}
-      
-		if (object->edge_collided)
+        if (object->edge_collided)
         {
             object->pos.x = Clamp(object->pos.x, OBJECT_RADIUS, screen_size.x - OBJECT_RADIUS);
             object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS, screen_size.y - OBJECT_RADIUS);
@@ -442,8 +432,6 @@ int main()
 
     float boss_angle = rand_between(0, 2 * M_PI);
     boss = (Boss){(Vector2){screen_size.x / 2, screen_size.y / 2},
-    /*boss = (Boss){(Vector2){screen_size.x, screen_size.y},*/
-
                   (Vector2){BOSS_SPEED * cos(boss_angle), BOSS_SPEED * sin(boss_angle)}};
 
     for (size_t i = 0; i < N; ++i)
@@ -454,8 +442,7 @@ int main()
                               .speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
                               .edge_collided = false,
                               .overlapped_object_id = -1,
-                              .is_in_normalized_rect = false,
-		};
+                              .is_in_normalized_rect = false};
 
         linked_list_push(head.data, i);
     }

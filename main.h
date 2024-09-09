@@ -2,7 +2,6 @@ typedef struct
 {
     Vector2 pos;
 	Vector2 speed;
-	size_t id;
 	size_t overlapped_object_id;
 	bool edge_collided;
 	bool is_in_normalized_rect;
