@@ -25,7 +25,8 @@ struct Node
 {
     struct Node *parent;
     struct Node **children;
-    LinkedList *data;
+    size_t *data;
+	size_t data_len;
     size_t layer;
     Rectangle expanded_rect;
 };
