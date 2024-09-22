@@ -53,6 +53,11 @@ Vector2 get_speed(Object *lhs_object, Object *rhs_object, float distance_squared
     return d;
 }
 
+void break_connection(Object *object) {
+	objects[object->overlapped_object_id].overlapped_object_id = -1;
+	object->overlapped_object_id = -1;
+}
+
 void split(struct Node *node)
 {
     if (!USE_CELLS)
@@ -181,10 +186,6 @@ void handle_collisions(struct Node *node)
 					Vector2 object_nested_speed = get_speed(object_nested, object, distance_squared);
 					Vector2 object_speed = get_speed(object, object_nested, distance_squared);
 
-					if (isnan(object_nested_speed.x) || isnan(object_nested_speed.y) || isnan(object_speed.x) || isnan(object_speed.x)) {
-						printf("%ffff\n");
-					}
-
 					object->speed = object_speed;
 					object_nested->speed = object_nested_speed;
 
@@ -235,8 +236,7 @@ void handle_objects()
             (object->edge_collided ||
              Vector2Distance(object->pos, objects[object->overlapped_object_id].pos) > OBJECT_RADIUS * 2))
         {
-            objects[object->overlapped_object_id].overlapped_object_id = -1;
-            object->overlapped_object_id = -1;
+			break_connection(object);
         }
 
 		if (object->edge_collided)
@@ -245,7 +245,7 @@ void handle_objects()
             object->pos.y = Clamp(object->pos.y, OBJECT_RADIUS, screen_size.y - OBJECT_RADIUS);
         }
 
-        DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, object->overlapped_object_id == -1 ? DARKGREEN : RED);
+        DrawCircle(object->pos.x, object->pos.y, OBJECT_RADIUS, DARKGREEN);
     }
 }
 
@@ -402,7 +402,14 @@ int main()
 		if (IsKeyPressed(KEY_SPACE)) {
 			for (size_t i = 0; i < N; ++i)
 			{
+				Object *object = &objects[i];
+
 				float angle = rand_between(0, 2 * M_PI);
+
+				if (object->overlapped_object_id != -1)
+				{
+					break_connection(object);
+				}
 
 				objects[i] = (Object){.pos = find_position(&head),
 					.speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
