@@ -181,6 +181,10 @@ void handle_collisions(struct Node *node)
 					Vector2 object_nested_speed = get_speed(object_nested, object, distance_squared);
 					Vector2 object_speed = get_speed(object, object_nested, distance_squared);
 
+					if (isnan(object_nested_speed.x) || isnan(object_nested_speed.y) || isnan(object_speed.x) || isnan(object_speed.x)) {
+						printf("%ffff\n");
+					}
+
 					object->speed = object_speed;
 					object_nested->speed = object_nested_speed;
 
@@ -395,6 +399,20 @@ int main()
 
 		handle_objects();
         
+		if (IsKeyPressed(KEY_SPACE)) {
+			for (size_t i = 0; i < N; ++i)
+			{
+				float angle = rand_between(0, 2 * M_PI);
+
+				objects[i] = (Object){.pos = find_position(&head),
+					.speed = (Vector2){SPEED * cos(angle), SPEED * sin(angle)},
+					.edge_collided = false,
+					.overlapped_object_id = -1,
+					.is_in_normalized_rect = false,
+				};
+			}
+		}
+
 		handle_nodes(&head);
 
         DrawText(TextFormat("%.1e", (float)(clocks / cycles)), 10, 10, 40, WHITE);
@@ -413,7 +431,7 @@ int main()
         }
 
         ClearBackground(BLACK);
-    }
+	}
 
     CloseWindow();
 
